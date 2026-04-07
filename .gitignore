@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data and Models (Excluded for performance)
+coco_images/
+annotations/
+checkpoints/
+*.pth
+*.pkl
+coco_train_list.json
+annotations.zip
+
+# Webapp dependencies
+webapp/node_modules/
+webapp/dist/
+webapp/.env
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
