@@ -75,16 +75,21 @@ class CaptionGenerator:
                     penalty = 0
                     if token_id in caption_ids:
                         token_word = self.vocab.itos.get(token_id, "")
-                        if token_word not in ["a", "the", "in", "and", "is", "of", "on", "sitting", "standing"]:
-                            penalty = 5.0 # Large penalty
+                        if token_word not in ["a", "an", "the", "in", "and", "is", "of", "on", "to", "with", "at", "by", "for"]:
+                            penalty = 2.0 # Noticeable penalty for repeated nouns/verbs/adjectives
                         else:
-                            penalty = 1.0 # Smaller penalty for glue words
+                            penalty = 0.0 # No penalty for grammar glue words
                             
+                    # Prevent model from generating UNK tokens (which get stripped out later yielding truncated sentences)
+                    if token_id == self.vocab.stoi.get("<UNK>", 3):
+                        penalty += 5.0
+                        
                     candidate = (caption_ids + [token_id], log_prob + topk_probs[k].item() - penalty)
                     all_candidates.append(candidate)
             
-            # Sort all candidates by score and pick top beam_size
-            all_candidates.sort(key=lambda x: x[1], reverse=True)
+            # Sort all candidates by score (normalized by sequence length to not punish long sentences)
+            alpha = 0.7
+            all_candidates.sort(key=lambda x: x[1] / (len(x[0]) ** alpha), reverse=True)
             beams = all_candidates[:beam_size]
             
             # If all top beams ended with <EOS>, we can stop
