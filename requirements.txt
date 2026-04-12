@@ -6,6 +6,9 @@ numpy
 tqdm
 nltk
 gradio
-json
 matplotlib
 pycocotools
+requests
+fastapi
+uvicorn
+python-multipart
