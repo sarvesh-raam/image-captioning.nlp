@@ -59,6 +59,17 @@ def train():
     scaler = GradScaler() # For Mixed Precision
     
     best_loss = float('inf')
+    start_epoch = 0
+    
+    # --- Auto Resume Safety Feature ---
+    if os.path.exists(SAVE_PATH):
+        print(f"Found existing checkpoint at {SAVE_PATH}. Resuming training!")
+        checkpoint = torch.load(SAVE_PATH, map_location=DEVICE, weights_only=False)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        best_loss = checkpoint.get('loss', float('inf'))
+    else:
+        print("Starting fresh training.")
     
     # --- Training Loop ---
     for epoch in range(NUM_EPOCHS):
