@@ -77,4 +77,4 @@ def setup_subset(num_images=500):
     print(f"Saved {len(subset_list)} image-caption pairs to coco_train_list.json")
 
 if __name__ == "__main__":
-    setup_subset(20000)
+    setup_subset(80000)
