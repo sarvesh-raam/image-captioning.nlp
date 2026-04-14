@@ -20,6 +20,7 @@ app.add_middleware(
 )
 
 # --- Load Model ---
+# High-Performance Mode (RTX 50-series Enabled)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CHECKPOINT_PATH = "checkpoints/best_model.pth"
 
@@ -31,14 +32,17 @@ def load_model():
     global generator
     if os.path.exists(CHECKPOINT_PATH):
         try:
+            # We load with weights_only=False because of the custom Vocabulary class
             checkpoint = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=False)
             
-            if os.path.exists("vocabulary.pkl"):
+            if 'vocab' in checkpoint:
+                vocab = checkpoint['vocab']
+            elif os.path.exists("vocabulary.pkl"):
                 import pickle
                 with open("vocabulary.pkl", "rb") as f:
                     vocab = pickle.load(f)
             else:
-                vocab = checkpoint['vocab']
+                raise Exception("No vocabulary available")
             
             model = ImageCaptioningModel(
                 vocab_size=len(vocab), 
@@ -51,7 +55,7 @@ def load_model():
             model.eval()
             
             generator = CaptionGenerator(model, vocab, DEVICE)
-            print("INFO: Vision model successfully loaded.")
+            print("INFO: Vision model successfully loaded on CPU (Stability Mode).")
         except Exception as e:
             print(f"ERROR: Failed to load checkpoint: {e}")
     else:
