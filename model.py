@@ -52,58 +52,47 @@ class TransformerEncoderBlock(nn.Module):
         x = self.norm2(x + ffn_out)
         return x
 
-class HybridEncoder(nn.Module):
-    def __init__(self, embed_dim=512, num_transformer_layers=2, num_heads=8,
-                 dim_feedforward=2048, dropout=0.1, pretrained=True, fine_tune_cnn=False):
+class ViTEncoder(nn.Module):
+    def __init__(self, embed_dim=512, dropout=0.1, pretrained=True, fine_tune=False):
         super().__init__()
         self.embed_dim = embed_dim
 
-        # ResNet50 CNN (Pretrained on ImageNet)
-        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT if pretrained else None)
-        modules = list(resnet.children())[:-2] # Remove global pool and FC
-        self.resnet = nn.Sequential(*modules)
-        self.resnet_dim = 2048
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((7, 7))
+        # Vision Transformer (ViT-B/16) - Pretrained on ImageNet
+        # Standard ViT-B/16 produces 768-dim embeddings
+        vit = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT if pretrained else None)
+        
+        # We keep the core transformer, removing the classification head
+        self.vit_backbone = vit
+        self.vit_dim = 768 # ViT-Base dimension
+        
+        # Freeze or fine-tune
+        for param in self.vit_backbone.parameters():
+            param.requires_grad = fine_tune
 
-        for param in self.resnet.parameters():
-            param.requires_grad = fine_tune_cnn
-
-        # Projection to Transformer embedding dimension
-        self.cnn_projection = nn.Linear(self.resnet_dim, embed_dim)
-
-        # 2D Positional encoding for spatial features
-        self.pos_encoding = PositionalEncoding2D(embed_dim, 7, 7, dropout)
-
-        # Transformer layers for global visual context
-        self.transformer_layers = nn.ModuleList([
-            TransformerEncoderBlock(embed_dim, num_heads, dim_feedforward, dropout)
-            for _ in range(num_transformer_layers)
-        ])
-
-        self.final_norm = nn.LayerNorm(embed_dim)
-        nn.init.xavier_uniform_(self.cnn_projection.weight)
-        nn.init.zeros_(self.cnn_projection.bias)
+        # Projection from ViT's 768 to our Decoder's embed_dim (usually 512)
+        self.projection = nn.Linear(self.vit_dim, embed_dim)
+        self.norm = nn.LayerNorm(embed_dim)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, images):
-        batch_size = images.size(0)
-        # Extract features: (B, 2048, 7, 7)
-        cnn_features = self.resnet(images)
-        cnn_features = self.adaptive_pool(cnn_features)
-        
-        # Reshape to sequence: (B, 49, 2048)
-        cnn_features = cnn_features.permute(0, 2, 3, 1)
-        cnn_features = cnn_features.reshape(batch_size, -1, self.resnet_dim)
-        
-        # Project and encode
-        features = self.cnn_projection(cnn_features)
-        features = self.pos_encoding(features)
+        # ViT expects (B, 3, 224, 224)
+        # Output is the class token + patch tokens
+        # We take the full sequence (B, 197, 768) to give the decoder rich spatial info
+        outputs = self.vit_backbone._process_input(images)
+        n = outputs.shape[0]
 
-        # Transformer encoding
-        for transformer_layer in self.transformer_layers:
-            features = transformer_layer(features)
+        # Expand the class token to the full batch
+        batch_class_token = self.vit_backbone.class_token.expand(n, -1, -1)
+        outputs = torch.cat([batch_class_token, outputs], dim=1)
 
-        features = self.final_norm(features)
-        return features
+        # Apply ViT transformer layers
+        outputs = self.vit_backbone.encoder(outputs)
+        
+        # Project tokens to decoder's embedding space
+        # shape: (B, 197, 512)
+        projected = self.projection(outputs)
+        features = self.norm(projected)
+        return self.dropout(features)
 
 class TransformerDecoder(nn.Module):
     def __init__(self, vocab_size, embed_dim=512, num_heads=8, num_layers=6,
@@ -148,17 +137,13 @@ class TransformerDecoder(nn.Module):
 
 class ImageCaptioningModel(nn.Module):
     def __init__(self, vocab_size, embed_dim=512, num_heads=8, num_layers=6,
-                 dim_feedforward=2048, dropout=0.1, use_hybrid_encoder=True,
-                 encoder_transformer_layers=2):
+                 dim_feedforward=2048, dropout=0.1, pretrained=True):
         super().__init__()
 
-        self.encoder = HybridEncoder(
+        self.encoder = ViTEncoder(
             embed_dim=embed_dim, 
-            num_transformer_layers=encoder_transformer_layers,
-            num_heads=num_heads, 
-            dim_feedforward=dim_feedforward,
             dropout=dropout, 
-            pretrained=True
+            pretrained=pretrained
         )
 
         self.decoder = TransformerDecoder(
