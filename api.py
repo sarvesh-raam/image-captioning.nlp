@@ -28,6 +28,7 @@ CHECKPOINT_PATH = "checkpoints/best_model.pth"
 generator = None
 
 # Manual load for stability
+@app.on_event("startup")
 def load_model():
     global generator
     print("DEBUG: load_model startup event triggered", flush=True)

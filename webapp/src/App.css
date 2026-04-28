@@ -217,20 +217,22 @@ body {
 /* Button style */
 .btn {
   margin-top: 24px;
-  background: var(--primary);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
   color: #fff;
   border: none;
-  padding: 12px 32px;
+  padding: 14px 36px;
   border-radius: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.1rem;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 15px var(--primary-glow);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px var(--accent-glow);
 }
 
 .btn:hover {
-  background: #4f46e5;
-  box-shadow: 0 8px 25px var(--primary-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px var(--accent-glow);
+  background: linear-gradient(135deg, #4f46e5 0%, #9333ea 100%);
 }
 
 .btn:disabled {

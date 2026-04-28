@@ -23,6 +23,7 @@ def deploy_to_spaces():
     
     # Essential files for the app to run
     files_to_upload = [
+        "Dockerfile",
         "app.py",
         "api.py",
         "model.py",

@@ -58,7 +58,8 @@ function App() {
     formData.append('file', selectedImage);
 
     try {
-      const response = await fetch("http://localhost:8001/predict", {
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001";
+      const response = await fetch(`${API_URL}/predict`, {
         method: "POST",
         body: formData,
       });
@@ -90,13 +91,13 @@ function App() {
     <div className="App">
       <nav className="navbar">
         <div className="logo-dot"></div>
-        <h1>VISION-NLP CAPTIONING SYSTEM | 1.0.0</h1>
+        <h1>Magic Image Captioner</h1>
       </nav>
 
       <div className="container">
         <header className="hero-section">
-          <h2>Automated Image <br/>Analysis Dashboard</h2>
-          <p>This hybrid CNN-Transformer architecture leverages ResNet50 and Multi-Head Attention mechanisms for high-precision natural language sequence generation from visual input data.</p>
+          <h2>Discover what's in<br/>your photos ✨</h2>
+          <p>Simply upload any image and our AI will magically describe it for you in plain English.</p>
         </header>
 
         <section className="upload-card">
@@ -127,8 +128,8 @@ function App() {
                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
                    </svg>
                 </div>
-                <p style={{ fontSize: '1.2rem', fontWeight: '600' }}>Transfer data for processing</p>
-                <p style={{ color: 'var(--text-muted)' }}>Select file or drag directly into frame</p>
+                <p style={{ fontSize: '1.2rem', fontWeight: '600' }}>Drop a photo here</p>
+                <p style={{ color: 'var(--text-muted)' }}>or click to browse from your device</p>
               </>
             )}
           </div>
@@ -139,19 +140,19 @@ function App() {
               onClick={generateCaption} 
               disabled={isLoading}
             >
-              {isLoading ? 'Processing Analysis...' : 'EXECUTE INFERENCE'}
+              {isLoading ? 'Thinking...' : 'Generate Magic Caption ✨'}
             </button>
           )}
 
           {isLoading && (
             <div className="loader-container">
               <div className="spinner"></div>
-              <span style={{ marginLeft: '12px', color: 'var(--accent)' }}>System is extracting visual feature maps...</span>
+              <span style={{ marginLeft: '12px', color: 'var(--accent)' }}>Our AI is looking at your photo...</span>
             </div>
           )}
 
           <div className={`result-section ${displayedCaption ? 'visible' : ''}`}>
-            <p className="result-label">ANALYSIS OUTPUT REPORT</p>
+            <p className="result-label">Here's what we see:</p>
             <p className="caption-text">{displayedCaption}</p>
           </div>
 
