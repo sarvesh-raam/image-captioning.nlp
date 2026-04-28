@@ -26,11 +26,31 @@ def load_app_model():
     else:
         vocab = checkpoint['vocab']
     
+    embed_dim = checkpoint.get('embed_dim', 512)
+    num_heads = checkpoint.get('num_heads', 8)
+    num_layers = checkpoint.get('num_layers', 6)
+
+    # Fallback inference if parameters weren't saved in older checkpoints
+    if 'embed_dim' not in checkpoint and 'model_state_dict' in checkpoint:
+        try:
+            state_dict = checkpoint['model_state_dict']
+            if 'encoder.cnn_projection.weight' in state_dict:
+                embed_dim = state_dict['encoder.cnn_projection.weight'].shape[0]
+            
+            layer_keys = [k for k in state_dict.keys() if 'decoder.transformer_decoder.layers' in k]
+            if layer_keys:
+                nums = [int(k.split('decoder.transformer_decoder.layers.')[1].split('.')[0]) 
+                        for k in layer_keys if k.split('decoder.transformer_decoder.layers.')[1].split('.')[0].isdigit()]
+                if nums:
+                    num_layers = max(nums) + 1
+        except Exception as e:
+            print(f"DEBUG: Could not infer arch from state_dict: {e}")
+
     model = ImageCaptioningModel(
         vocab_size=len(vocab), 
-        embed_dim=512, 
-        num_heads=8, 
-        num_layers=6
+        embed_dim=embed_dim, 
+        num_heads=num_heads, 
+        num_layers=num_layers
     ).to(DEVICE)
     
     model.load_state_dict(checkpoint['model_state_dict'])
