@@ -1,99 +1,59 @@
-# Image Captioning NLP
+# image-captioning-nlp
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-Deployed-black?logo=vercel)](https://image-captioning-nlp.vercel.app/)
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Backend-FFD21E?logo=huggingface&logoColor=000)]()
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)]()
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg?logo=python&logoColor=white)]()
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg?logo=pytorch&logoColor=white)]()
 
-A scalable image captioning service combining a ResNet50 vision encoder with a multi-head attention transformer decoder. Trained on the MS COCO 2014 dataset.
+A full-stack image captioning service. The backend is a FastAPI application serving a PyTorch ResNet50 + Transformer model, deployed via Docker on Hugging Face Spaces. The frontend is a React/Vite application hosted on Vercel.
 
-The project is split into a PyTorch/FastAPI backend for model inference and a React/Vite frontend for the user interface.
+## Quickstart
 
-## System Architecture
-
-* **Vision Backbone:** ResNet50 (pre-trained, customized projection layers)
-* **Decoder:** 6-layer Transformer Decoder with 8 attention heads (512 embedding dim)
-* **Inference Strategy:** Beam Search (k=3) with length normalization
-* **API:** FastAPI serving REST endpoints, containerized via Docker
-* **Client:** React 18 + Vite with glassmorphism UI tokens
-
-## Setup Instructions
-
-### 1. Backend (Inference API)
-
-Requirements: Python 3.10+ and a CUDA-compatible GPU (optional but recommended for training).
-
-```bash
-# Set up virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Start the development server
-python api.py
-```
-The API will be available at `http://localhost:8001`.
-
-### 2. Frontend (React Client)
-
-Requirements: Node.js 18+.
-
+### Frontend
 ```bash
 cd webapp
 npm install
-
-# Start the frontend development server
 npm run dev
 ```
 
-## Production Deployment
-
-### Backend Server (Docker / Hugging Face Spaces)
-
-The backend is configured for containerized deployment. A `deploy_to_hf.py` script is provided for automated syncing to Hugging Face Spaces.
-
+### Backend
 ```bash
-# Automate deployment to Hugging Face Spaces
+pip install -r requirements.txt
+python api.py
+```
+*Requires `checkpoints/best_model.pth` and `vocabulary.pkl` for inference.*
+
+## Deployment
+
+**Frontend (Vercel)**
+Pushes to the `main` branch are automatically deployed by Vercel. Ensure the `VITE_API_URL` environment variable is set to the Hugging Face Space URL.
+
+**Backend (Hugging Face / Docker)**
+The API is containerized using the provided `Dockerfile`. Deploy updates via the CLI:
+```bash
 python deploy_to_hf.py
 ```
-*Note: Ensure your `best_model.pth` is placed in the `checkpoints/` directory before deploying.*
-
-### Frontend Application (Vercel)
-
-The React client can be deployed to Vercel or Netlify. You must provide the production API URL during the build step.
-
-Environment variables required:
-`VITE_API_URL` - The HTTPS endpoint of your deployed FastAPI server.
 
 ## API Reference
 
-### `POST /predict`
-Generates a caption for an uploaded image.
+**`POST /predict`**
 
-**Request:**
-* `Content-Type: multipart/form-data`
-* `file`: (Required) The image binary.
+Accepts an image and returns a generated caption.
 
-**Response:**
+```bash
+curl -X POST -F "file=@image.jpg" https://your-space-url.hf.space/predict
+```
 ```json
 {
   "caption": "a person riding a bicycle on a city street."
 }
 ```
 
-## Repository Structure
+## Project Structure
 
-```text
-.
-├── api.py                  # FastAPI server configuration
-├── app.py                  # Fallback Gradio interface
-├── data_loader.py          # COCO dataset parsing and transforms
-├── deploy_to_hf.py         # Automated deployment script
-├── inference.py            # Beam search and generation logic
-├── model.py                # PyTorch architecture (ResNet + Transformer)
-├── train.py                # Training loop and checkpointing
-├── Dockerfile              # Production container definition
-├── requirements.txt        # Python dependencies
-└── webapp/                 # React frontend directory
-```
+- `/webapp` - React/Vite frontend source
+- `model.py` - PyTorch model architecture
+- `api.py` - FastAPI entrypoint
+- `train.py` - Model training script (MS COCO)
+- `Dockerfile` - Backend container config
