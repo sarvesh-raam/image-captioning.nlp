@@ -2,7 +2,7 @@ import os
 from huggingface_hub import HfApi, login
 
 def deploy_to_spaces():
-    print("🚀 Starting Professional Deployment to Hugging Face Spaces...")
+    print("[INIT] Starting Professional Deployment to Hugging Face Spaces...")
     
     # 1. Ask for Hugging Face Token
     print("\n[Step 1] Authentication")
@@ -44,7 +44,7 @@ def deploy_to_spaces():
                 repo_type="space"
             )
         else:
-            print(f"⚠️ Warning: {file} not found locally.")
+            print(f"[WARNING] {file} not found locally.")
 
     # Uploading the large model checkpoint securely
     if os.path.exists("checkpoints/best_model.pth"):
@@ -55,11 +55,11 @@ def deploy_to_spaces():
             repo_id=repo_id,
             repo_type="space"
         )
-        print("✅ Model uploaded successfully!")
+        print("[SUCCESS] Model uploaded successfully!")
     else:
-        print("⚠️ Warning: checkpoints/best_model.pth not found! Make sure to train first.")
+        print("[WARNING] checkpoints/best_model.pth not found! Make sure to train first.")
 
-    print(f"\n🎉 Deployment Triggered! Check your space at: https://huggingface.co/spaces/{repo_id}")
+    print(f"\n[DONE] Deployment Triggered! Check your space at: https://huggingface.co/spaces/{repo_id}")
 
 if __name__ == "__main__":
     deploy_to_spaces()

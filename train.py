@@ -15,10 +15,10 @@ def train():
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     if DEVICE.type == "cuda":
-        print(f"✅ BALANCED MODE: Using GPU ({torch.cuda.get_device_name(0)})")
+        print(f"[INFO] BALANCED MODE: Using GPU ({torch.cuda.get_device_name(0)})")
         # Removed cudnn.benchmark to prevent high-power tuning spikes
     else:
-        print("⚠️ WARNING: No GPU detected. Training will be extremely slow on CPU.")
+        print("[WARNING] No GPU detected. Training will be extremely slow on CPU.")
 
     ROOT_TRAIN = "coco_images/train2014"
     TRAIN_JSON = "coco_train_list.json"

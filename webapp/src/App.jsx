@@ -96,7 +96,7 @@ function App() {
 
       <div className="container">
         <header className="hero-section">
-          <h2>Discover what's in<br/>your photos ✨</h2>
+          <h2>Discover what's in<br/>your photos</h2>
           <p>Simply upload any image and our AI will magically describe it for you in plain English.</p>
         </header>
 
@@ -140,7 +140,7 @@ function App() {
               onClick={generateCaption} 
               disabled={isLoading}
             >
-              {isLoading ? 'Thinking...' : 'Generate Magic Caption ✨'}
+              {isLoading ? 'Thinking...' : 'Generate Magic Caption'}
             </button>
           )}
 

@@ -81,7 +81,7 @@ def predict(image, beam_size=3):
 
 # --- Gradio UI Design ---
 with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
-    gr.Markdown("# 🖼️ Hybrid CNN-Transformer Image Captioner")
+    gr.Markdown("# Hybrid CNN-Transformer Image Captioner")
     gr.Markdown("Upload an image and the model will generate a descriptive caption using a ResNet50-Transformer architecture.")
     
     with gr.Row():
