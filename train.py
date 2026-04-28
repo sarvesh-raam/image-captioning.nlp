@@ -24,7 +24,7 @@ def train():
     TRAIN_JSON = "coco_train_list.json"
     VOCAB_PATH = "vocabulary.pkl"
     
-    # Optimized for ViT-B-16 + RTX 5050 Smooth Browsing
+    # Optimized for ViT-B-16 + High VRAM GPUs
     BATCH_SIZE = 16 
     NUM_WORKERS = 2 
     LEARNING_RATE = 1e-4
