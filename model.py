@@ -52,47 +52,57 @@ class TransformerEncoderBlock(nn.Module):
         x = self.norm2(x + ffn_out)
         return x
 
-class ViTEncoder(nn.Module):
+class CNNEncoder(nn.Module):
     def __init__(self, embed_dim=512, dropout=0.1, pretrained=True, fine_tune=False):
         super().__init__()
         self.embed_dim = embed_dim
-
-        # Vision Transformer (ViT-B/16) - Pretrained on ImageNet
-        # Standard ViT-B/16 produces 768-dim embeddings
-        vit = models.vit_b_16(weights=models.ViT_B_16_Weights.DEFAULT if pretrained else None)
         
-        # We keep the core transformer, removing the classification head
-        self.vit_backbone = vit
-        self.vit_dim = 768 # ViT-Base dimension
+        # ResNet50 Backbone
+        resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT if pretrained else None)
         
-        # Freeze or fine-tune
-        for param in self.vit_backbone.parameters():
+        # We need the spatial features, so we remove the last two layers (avgpool and fc)
+        modules = list(resnet.children())[:-2]
+        self.resnet = nn.Sequential(*modules)
+        
+        # Freeze or fine-tune backbone
+        for param in self.resnet.parameters():
             param.requires_grad = fine_tune
 
-        # Projection from ViT's 768 to our Decoder's embed_dim (usually 512)
-        self.projection = nn.Linear(self.vit_dim, embed_dim)
-        self.norm = nn.LayerNorm(embed_dim)
+        # Projection from ResNet50's 2048 filters to our Decoder's embed_dim (512)
+        self.cnn_projection = nn.Linear(2048, embed_dim)
+        
+        # Spatial Positional Encoding for the 7x7 grid
+        self.pos_encoding = PositionalEncoding2D(embed_dim)
+        
+        # Secondary Transformer Encoder refinement layers
+        self.transformer_layers = nn.ModuleList([
+            TransformerEncoderBlock(embed_dim, num_heads=8, dim_feedforward=2048, dropout=dropout)
+            for _ in range(2)
+        ])
+        
+        self.final_norm = nn.LayerNorm(embed_dim)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, images):
-        # ViT expects (B, 3, 224, 224)
-        # Output is the class token + patch tokens
-        # We take the full sequence (B, 197, 768) to give the decoder rich spatial info
-        outputs = self.vit_backbone._process_input(images)
-        n = outputs.shape[0]
-
-        # Expand the class token to the full batch
-        batch_class_token = self.vit_backbone.class_token.expand(n, -1, -1)
-        outputs = torch.cat([batch_class_token, outputs], dim=1)
-
-        # Apply ViT transformer layers
-        outputs = self.vit_backbone.encoder(outputs)
+        # images: (B, 3, 224, 224)
+        # ResNet50 output: (B, 2048, 7, 7)
+        features = self.resnet(images)
         
-        # Project tokens to decoder's embedding space
-        # shape: (B, 197, 512)
-        projected = self.projection(outputs)
-        features = self.norm(projected)
-        return self.dropout(features)
+        # Reshape to sequence of tokens: (B, 49, 2048)
+        features = features.permute(0, 2, 3, 1)
+        features = features.reshape(features.size(0), -1, features.size(3))
+        
+        # Project to embedding dimension
+        projected = self.cnn_projection(features)
+        
+        # Add spatial awareness
+        projected = self.pos_encoding(projected)
+        
+        # Refine through secondary transformer layers
+        for layer in self.transformer_layers:
+            projected = layer(projected)
+            
+        return self.final_norm(projected)
 
 class TransformerDecoder(nn.Module):
     def __init__(self, vocab_size, embed_dim=512, num_heads=8, num_layers=6,
@@ -140,7 +150,7 @@ class ImageCaptioningModel(nn.Module):
                  dim_feedforward=2048, dropout=0.1, pretrained=True):
         super().__init__()
 
-        self.encoder = ViTEncoder(
+        self.encoder = CNNEncoder(
             embed_dim=embed_dim, 
             dropout=dropout, 
             pretrained=pretrained

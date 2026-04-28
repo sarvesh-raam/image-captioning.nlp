@@ -31,6 +31,11 @@ def train():
     NUM_EPOCHS = 35
     SAVE_PATH = "checkpoints/best_model.pth"
     
+    # Architecture config
+    EMBED_DIM = 512
+    NUM_HEADS = 8
+    NUM_LAYERS = 6
+    
     # --- Data ---
     if not os.path.exists(TRAIN_JSON):
         print(f"Error: {TRAIN_JSON} not found. Ensure you have downloaded the COCO annotations.")
@@ -66,9 +71,9 @@ def train():
     # --- Model ---
     model = ImageCaptioningModel(
         vocab_size=len(vocab), 
-        embed_dim=512, 
-        num_heads=8, 
-        num_layers=6
+        embed_dim=EMBED_DIM, 
+        num_heads=NUM_HEADS, 
+        num_layers=NUM_LAYERS
     ).to(DEVICE)
     
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.stoi["<PAD>"])
@@ -128,7 +133,10 @@ def train():
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'vocab': vocab,
-                'loss': best_loss
+                'loss': best_loss,
+                'embed_dim': EMBED_DIM,
+                'num_heads': NUM_HEADS,
+                'num_layers': NUM_LAYERS
             }, SAVE_PATH)
             print(f"New best model saved with loss: {best_loss:.4f}")
 
