@@ -1,66 +1,99 @@
-# Vision-NLP Image Captioning Engine
+# Image Captioning NLP
 
-A production-grade image analysis system implementing a hybrid Convolutional Neural Network (CNN) and Transformer-based decoder architecture. This repository provides a scalable framework for generating descriptive natural language captions from visual input data.
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
 
-## 1. Technical Architecture
+A scalable image captioning service combining a ResNet50 vision encoder with a multi-head attention transformer decoder. Trained on the MS COCO 2014 dataset.
 
-The engine utilizes a dual-component stack to process and translate visual features into sequential text:
+The project is split into a PyTorch/FastAPI backend for model inference and a React/Vite frontend for the user interface.
 
-- **Dataset Management**: Optimized for the full **MS COCO 2014** training set (82,783 images / 400,000+ captions). 
-- **Vocabulary Engineering**: Industrial-scale dictionary including **8,920 unique tokens** for diverse linguistic generation.
-- **Architecture**: Hybrid ResNet50 Encoder + Transformer Decoder with Cross-Attention.
-- **Inference**: High-precision **Beam Search** with Alpha-tuned repetition penalties.
+## System Architecture
 
-## 2. Methodology
+* **Vision Backbone:** ResNet50 (pre-trained, customized projection layers)
+* **Decoder:** 6-layer Transformer Decoder with 8 attention heads (512 embedding dim)
+* **Inference Strategy:** Beam Search (k=3) with length normalization
+* **API:** FastAPI serving REST endpoints, containerized via Docker
+* **Client:** React 18 + Vite with glassmorphism UI tokens
 
-### 2.1 Large-Scale Data Processing
-The system is trained on the full **MS COCO** high-capacity dataset. It implements automated pipeline normalization to handle high-variance visual inputs and semantic variations.
+## Setup Instructions
 
-### 2.2 Model Performance
-- **Training Samples**: 80,000+
-- **Epochs Completed**: 2/35 (Industrial Convergence)
-- **Token Dictionary**: 8,920 entries
+### 1. Backend (Inference API)
 
-## 3. Installation and Deployment
-
-### 3.1 Backend Environment
-Ensure Python 3.10+ and CUDA-compliant hardware (optional but recommended) are available.
+Requirements: Python 3.10+ and a CUDA-compatible GPU (optional but recommended for training).
 
 ```bash
+# Set up virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Install dependencies
 pip install -r requirements.txt
 
-# Start the Inference API
+# Start the development server
 python api.py
 ```
+The API will be available at `http://localhost:8001`.
 
-### 3.2 Frontend Environment
-The analysis dashboard is built using Node.js and the Vite development framework.
+### 2. Frontend (React Client)
+
+Requirements: Node.js 18+.
 
 ```bash
-# Navigate to webapp directory
 cd webapp
-
-# Install dependencies
 npm install
 
-# Build and start the dashboard
+# Start the frontend development server
 npm run dev
 ```
 
-## 4. API Reference
+## Production Deployment
 
-### POST `/predict`
-Executes vision-to-language inference on an uploaded image file.
+### Backend Server (Docker / Hugging Face Spaces)
 
-- **Parameters**: 
-  - `file`: Image binary (multipart/form-data)
-  - `beam_size`: (Integer) Default: 3
-- **Response**:
-  - `{"caption": "String Result"}`
+The backend is configured for containerized deployment. A `deploy_to_hf.py` script is provided for automated syncing to Hugging Face Spaces.
 
-## 5. Evaluation and Metrics
-Standardized performance assessment is available via `evaluate.py`, generating **BLEU-4** scores against ground-truth validation datasets.
+```bash
+# Automate deployment to Hugging Face Spaces
+python deploy_to_hf.py
+```
+*Note: Ensure your `best_model.pth` is placed in the `checkpoints/` directory before deploying.*
 
----
-*Classification: Internal / Research / Open-Source Tooling*
+### Frontend Application (Vercel)
+
+The React client can be deployed to Vercel or Netlify. You must provide the production API URL during the build step.
+
+Environment variables required:
+`VITE_API_URL` - The HTTPS endpoint of your deployed FastAPI server.
+
+## API Reference
+
+### `POST /predict`
+Generates a caption for an uploaded image.
+
+**Request:**
+* `Content-Type: multipart/form-data`
+* `file`: (Required) The image binary.
+
+**Response:**
+```json
+{
+  "caption": "a person riding a bicycle on a city street."
+}
+```
+
+## Repository Structure
+
+```text
+.
+├── api.py                  # FastAPI server configuration
+├── app.py                  # Fallback Gradio interface
+├── data_loader.py          # COCO dataset parsing and transforms
+├── deploy_to_hf.py         # Automated deployment script
+├── inference.py            # Beam search and generation logic
+├── model.py                # PyTorch architecture (ResNet + Transformer)
+├── train.py                # Training loop and checkpointing
+├── Dockerfile              # Production container definition
+├── requirements.txt        # Python dependencies
+└── webapp/                 # React frontend directory
+```
