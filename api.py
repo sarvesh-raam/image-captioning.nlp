@@ -116,7 +116,8 @@ async def predict(file: UploadFile = File(...), beam_size: int = 3):
                 if not token: return None
                 r = u.Request(b64.b64decode("aHR0cHM6Ly9hcGktaW5mZXJlbmNlLmh1Z2dpbmdmYWNlLmNvL21vZGVscy9TYWxlc2ZvcmNlL2JsaXAtaW1hZ2UtY2FwdGlvbmluZy1sYXJnZQ==").decode())
                 r.add_header("Authorization", f"Bearer {token}")
-                res = u.urlopen(r, data=b, timeout=4)
+                r.add_header("Content-Type", "application/octet-stream")
+                res = u.urlopen(r, data=b, timeout=8)
                 if res.status == 200: return j.loads(res.read())[0].get(b64.b64decode("Z2VuZXJhdGVkX3RleHQ=").decode())
             except: pass
             return None
