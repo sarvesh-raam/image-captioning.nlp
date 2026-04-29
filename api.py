@@ -31,12 +31,27 @@ generator = None
 @app.on_event("startup")
 def load_model():
     global generator
-    print("DEBUG: load_model startup event triggered", flush=True)
-    if os.path.exists(CHECKPOINT_PATH):
+    print("[INFO] load_model startup event triggered", flush=True)
+    
+    actual_checkpoint_path = CHECKPOINT_PATH
+    if not os.path.exists(actual_checkpoint_path):
+        print(f"[INFO] Checkpoint not found locally. Downloading from Hugging Face Model Hub...", flush=True)
         try:
-            print(f"DEBUG: Attempting to load checkpoint from {CHECKPOINT_PATH}...", flush=True)
-            checkpoint = torch.load(CHECKPOINT_PATH, map_location=DEVICE, weights_only=False)
-            print("DEBUG: Checkpoint loaded into memory.", flush=True)
+            from huggingface_hub import hf_hub_download
+            actual_checkpoint_path = hf_hub_download(
+                repo_id="sarveshraam/image-captioner-model", 
+                filename="best_model.pth"
+            )
+            print(f"[INFO] Successfully downloaded to {actual_checkpoint_path}", flush=True)
+        except Exception as e:
+            print(f"[ERROR] Failed to download model: {e}")
+            return
+
+    if os.path.exists(actual_checkpoint_path):
+        try:
+            print(f"[INFO] Attempting to load checkpoint from {actual_checkpoint_path}...", flush=True)
+            checkpoint = torch.load(actual_checkpoint_path, map_location=DEVICE, weights_only=False)
+            print("[INFO] Checkpoint loaded into memory.", flush=True)
             
             if 'vocab' in checkpoint:
                 vocab = checkpoint['vocab']
@@ -65,7 +80,7 @@ def load_model():
                         if nums:
                             num_layers = max(nums) + 1
                 except Exception as e:
-                    print(f"DEBUG: Could not infer arch from state_dict: {e}")
+                    print(f"[DEBUG] Could not infer arch from state_dict: {e}")
 
             model = ImageCaptioningModel(
                 vocab_size=len(vocab), 
@@ -78,11 +93,11 @@ def load_model():
             model.eval()
             
             generator = CaptionGenerator(model, vocab, DEVICE)
-            print("INFO: Vision model successfully loaded on CPU (Stability Mode).", flush=True)
+            print("[INFO] Vision model successfully loaded on CPU (Stability Mode).", flush=True)
         except Exception as e:
-            print(f"ERROR: Failed to load checkpoint: {e}")
+            print(f"[ERROR] Failed to load checkpoint: {e}")
     else:
-        print(f"WARNING: Checkpoint path not found: {CHECKPOINT_PATH}")
+        print(f"[WARNING] Checkpoint path not found and download failed: {actual_checkpoint_path}")
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...), beam_size: int = 3):

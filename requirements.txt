@@ -5,6 +5,13 @@ pillow
 numpy
 tqdm
 nltk
+torch
+torchvision
+torchaudio
+pillow
+numpy
+tqdm
+nltk
 gradio
 matplotlib
 pycocotools
@@ -12,3 +19,5 @@ requests
 fastapi
 uvicorn
 python-multipart
+huggingface-hub  
+ 

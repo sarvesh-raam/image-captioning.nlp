@@ -46,14 +46,16 @@ def deploy_to_spaces():
         else:
             print(f"[WARNING] {file} not found locally.")
 
-    # Uploading the large model checkpoint securely
+    # Uploading the large model checkpoint securely to a MODEL repository
     if os.path.exists("checkpoints/best_model.pth"):
-        print("Uploading best_model.pth (This might take a while for large 2GB-3GB models...)")
+        model_repo_id = f"{username}/{repo_name}-model"
+        print(f"\n[Step 4] Uploading Large Checkpoint to Model Hub: {model_repo_id} (bypasses 1GB Space limit)")
+        api.create_repo(repo_id=model_repo_id, repo_type="model", exist_ok=True)
         api.upload_file(
             path_or_fileobj="checkpoints/best_model.pth",
-            path_in_repo="checkpoints/best_model.pth",
-            repo_id=repo_id,
-            repo_type="space"
+            path_in_repo="best_model.pth",
+            repo_id=model_repo_id,
+            repo_type="model"
         )
         print("[SUCCESS] Model uploaded successfully!")
     else:
