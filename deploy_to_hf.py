@@ -48,7 +48,7 @@ def deploy_to_spaces():
 
     # Uploading the large model checkpoint securely to a MODEL repository
     if os.path.exists("checkpoints/best_model.pth"):
-        model_repo_id = f"{username}/{repo_name}-model"
+        model_repo_id = f"{username}/{space_name}-model"
         print(f"\n[Step 4] Uploading Large Checkpoint to Model Hub: {model_repo_id} (bypasses 1GB Space limit)")
         api.create_repo(repo_id=model_repo_id, repo_type="model", exist_ok=True)
         api.upload_file(
