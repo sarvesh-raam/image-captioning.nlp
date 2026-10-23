@@ -1,0 +1,10 @@
+checkpoints/
+coco_images/
+annotations/
+webapp/
+*.pth
+*.pkl
+*.json
+*.docx
+.git/
+__pycache__/

@@ -1,21 +1,32 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import './App.css'
+import AttentionOverlay from './AttentionOverlay.jsx'
+
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8001").replace(/\/$/, "");
+const MAX_UPLOAD_MB = 10;
+const EXAMPLES = ["/examples/example1.jpg", "/examples/example2.jpg", "/examples/example3.jpg"];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function App() {
   const [selectedImage, setSelectedImage] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
-  const [caption, setCaption] = useState("")
-  const [displayedCaption, setDisplayedCaption] = useState("")
+  const [result, setResult] = useState(null)
+  const [activeWord, setActiveWord] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [statusText, setStatusText] = useState("")
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState(null)
+  const inputRef = useRef(null)
 
-  // Typewriter effect for the caption
+  // The free Hugging Face Space sleeps when idle; ping it on page load so it starts waking up
   useEffect(() => {
-    if (caption && !isLoading) {
-      setDisplayedCaption(caption);
-    }
-  }, [caption, isLoading]);
+    fetch(`${API_URL}/health`).catch(() => {});
+  }, []);
+
+  // Release the previous preview's memory when the image changes
+  useEffect(() => {
+    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
+  }, [previewUrl]);
 
   const onDragOver = (e) => {
     e.preventDefault();
@@ -36,14 +47,28 @@ function App() {
   };
 
   const handleImageSelection = (file) => {
-    if (file && file.type.startsWith('image/')) {
-      setSelectedImage(file);
-      setPreviewUrl(URL.createObjectURL(file));
-      setCaption("");
-      setDisplayedCaption("");
-      setError(null);
-    } else {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
       setError("Please upload a valid image file.");
+      return;
+    }
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      setError(`Image is too large (max ${MAX_UPLOAD_MB} MB).`);
+      return;
+    }
+    setSelectedImage(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setResult(null);
+    setActiveWord(null);
+    setError(null);
+  };
+
+  const loadExample = async (url) => {
+    try {
+      const blob = await (await fetch(url)).blob();
+      handleImageSelection(new File([blob], url.split('/').pop(), { type: blob.type || 'image/jpeg' }));
+    } catch {
+      setError("Could not load the example image.");
     }
   };
 
@@ -51,41 +76,54 @@ function App() {
     if (!selectedImage) return;
 
     setIsLoading(true);
-    setCaption("");
+    setResult(null);
+    setActiveWord(null);
     setError(null);
+    setStatusText("Our AI is looking at your photo...");
 
     const formData = new FormData();
     formData.append('file', selectedImage);
 
+    // Retry while the server is cold-starting (network error or 502/503 from the Space proxy)
+    const MAX_ATTEMPTS = 8;
     try {
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8001";
-      const response = await fetch(`${API_URL}/predict`, {
-        method: "POST",
-        body: formData,
-      });
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        let response;
+        try {
+          response = await fetch(`${API_URL}/predict`, { method: "POST", body: formData });
+        } catch {
+          response = null;
+        }
 
-      if (!response.ok) {
-        throw new Error('Failed to generate caption. Is the backend running?');
+        if (response && response.ok) {
+          setResult(await response.json());
+          return;
+        }
+
+        const retryable = !response || [502, 503, 504].includes(response.status);
+        if (!retryable || attempt === MAX_ATTEMPTS) {
+          let message = "Failed to generate caption. The server may be offline.";
+          if (response) {
+            const data = await response.json().catch(() => null);
+            message = data?.detail || data?.error || `Server error (${response.status}).`;
+          }
+          throw new Error(message);
+        }
+
+        setStatusText("Waking up the server (this can take a minute on first use)...");
+        await sleep(8000);
       }
-
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      // Nuclear fix for string artifacts
-      const cleanCaption = (data.caption || "")
-        .replace(/undefined/g, '')
-        .replace(/\.+$/, '.') // Ensure only one dot at the end
-        .trim();
-
-      setCaption(cleanCaption);
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
+      setStatusText("");
     }
   };
+
+  const attention = result?.attention;
+  const captions = result?.captions || [];
+  const activeWeights = attention && activeWord !== null ? attention.maps[activeWord] : null;
 
   return (
     <div className="App">
@@ -101,25 +139,34 @@ function App() {
         </header>
 
         <section className="upload-card">
-          <div 
+          <div
             className={`dropzone ${isDragging ? 'dragging' : ''}`}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
-            onClick={() => document.getElementById('imageInput').click()}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
+            role="button"
+            tabIndex={0}
+            aria-label="Upload an image"
           >
-            <input 
-              type="file" 
-              id="imageInput" 
-              className="hidden" 
+            <input
+              type="file"
+              ref={inputRef}
+              className="hidden"
               accept="image/*"
-              onChange={(e) => handleImageSelection(e.target.files[0])}
+              onChange={(e) => { handleImageSelection(e.target.files[0]); e.target.value = ""; }}
             />
-            
+
             {previewUrl ? (
               <div className="preview-container">
-                <img src={previewUrl} alt="Preview" className="preview-image" />
-                <p style={{ marginTop: '10px', color: 'var(--text-muted)' }}>Switch file for analysis</p>
+                <AttentionOverlay
+                  src={previewUrl}
+                  grid={attention?.grid}
+                  crop={attention?.crop}
+                  weights={activeWeights}
+                />
+                <p style={{ marginTop: '10px', color: 'var(--text-muted)' }}>Click or drop to choose a different photo</p>
               </div>
             ) : (
               <>
@@ -134,10 +181,19 @@ function App() {
             )}
           </div>
 
+          <div className="examples">
+            <span>Or try an example:</span>
+            {EXAMPLES.map((url, i) => (
+              <button key={url} className="example-thumb" onClick={() => loadExample(url)} aria-label={`Example image ${i + 1}`}>
+                <img src={url} alt="" />
+              </button>
+            ))}
+          </div>
+
           {selectedImage && (
-            <button 
-              className="btn" 
-              onClick={generateCaption} 
+            <button
+              className="btn"
+              onClick={generateCaption}
               disabled={isLoading}
             >
               {isLoading ? 'Thinking...' : 'Generate Magic Caption'}
@@ -147,18 +203,61 @@ function App() {
           {isLoading && (
             <div className="loader-container">
               <div className="spinner"></div>
-              <span style={{ marginLeft: '12px', color: 'var(--accent)' }}>Our AI is looking at your photo...</span>
+              <span style={{ marginLeft: '12px', color: 'var(--accent)' }}>{statusText}</span>
             </div>
           )}
 
-          <div className={`result-section ${displayedCaption ? 'visible' : ''}`}>
+          <div className={`result-section ${result ? 'visible' : ''}`} aria-live="polite">
             <p className="result-label">Here's what we see:</p>
-            <p className="caption-text">{displayedCaption}</p>
+            <p className="caption-text">{result?.caption}</p>
+
+            {result?.warnings?.map((w) => (
+              <p key={w} className="warning">{w}</p>
+            ))}
+
+            {attention?.words?.length > 0 && (
+              <>
+                <p className="result-label" style={{ marginTop: '24px' }}>Where the model looked (hover or tap a word)</p>
+                <div className="word-chips">
+                  {attention.words.map((word, i) => (
+                    <button
+                      key={i}
+                      className={`word-chip ${activeWord === i ? 'active' : ''}`}
+                      onMouseEnter={() => setActiveWord(i)}
+                      onMouseLeave={() => setActiveWord(null)}
+                      onFocus={() => setActiveWord(i)}
+                      onBlur={() => setActiveWord(null)}
+                      onClick={() => setActiveWord(i)}
+                      title={`Probability ${(attention.word_probs[i] * 100).toFixed(0)}%`}
+                    >
+                      {word}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {captions.length > 1 && (
+              <>
+                <p className="result-label" style={{ marginTop: '24px' }}>Other candidates</p>
+                <ul className="alt-captions">
+                  {captions.slice(1).map((c) => (
+                    <li key={c.text}>{c.text}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {typeof result?.confidence === 'number' && (
+              <p className="result-meta">
+                Confidence {(result.confidence * 100).toFixed(0)}% · generated in {(result.inference_ms / 1000).toFixed(1)}s
+              </p>
+            )}
           </div>
 
           {error && (
-            <div style={{ marginTop: '20px', color: '#ef4444' }}>
-              System Error: {error}
+            <div role="alert" style={{ marginTop: '20px', color: '#ef4444' }}>
+              {error}
             </div>
           )}
         </section>

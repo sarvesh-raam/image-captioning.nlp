@@ -22,3 +22,10 @@ webapp/.env
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local secrets
+.env
+
+# Generated datasets and caches (prepare_data.py / extract_features.py)
+data/
+.pytest_cache/

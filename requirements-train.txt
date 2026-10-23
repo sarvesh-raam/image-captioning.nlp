@@ -1,0 +1,11 @@
+# Extra dependencies for training, evaluation, data download and the Gradio demo.
+-r requirements.txt
+tqdm==4.67.3
+nltk==3.9.4
+requests==2.33.1
+gradio==5.50.0
+pandas==2.3.3
+pyarrow==23.0.1
+pycocoevalcap==1.2
+pytest
+httpx

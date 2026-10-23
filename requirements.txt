@@ -1,23 +1,12 @@
-torch
-torchvision
-torchaudio
-pillow
-numpy
-tqdm
-nltk
-torch
-torchvision
-torchaudio
-pillow
-numpy
-tqdm
-nltk
-gradio
-matplotlib
-pycocotools
-requests
-fastapi
-uvicorn
-python-multipart
-huggingface-hub  
- 
+# Runtime dependencies for the API server (used by the Docker image).
+# In Docker, torch is installed from the CPU-only index (see Dockerfile) to keep the image small.
+torch==2.11.0
+torchvision==0.26.0
+pillow==11.3.0
+numpy==2.4.4
+fastapi==0.135.2
+uvicorn==0.42.0
+python-multipart==0.0.22
+huggingface_hub==1.8.0
+# Needed only for CLIP encoders
+transformers==5.5.4

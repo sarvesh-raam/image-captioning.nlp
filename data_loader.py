@@ -1,11 +1,19 @@
-import os
-import torch
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image
 import json
-import numpy as np
+import re
 from collections import Counter
+
+import numpy as np
+import torch
+from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+
+# Image normalisation statistics expected by each backbone
+NORMALIZATION = {
+    "resnet50": ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+    "clip": ((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
+}
+MAX_CAPTION_TOKENS = 30
+
 
 class Vocabulary:
     def __init__(self, freq_threshold=5):
@@ -18,8 +26,8 @@ class Vocabulary:
 
     @staticmethod
     def tokenizer_eng(text):
-        # Basic word-based tokenizer (can use spacy for better quality)
-        return str(text).lower().split()
+        # Lowercase and split punctuation into its own tokens ("kitchen." -> "kitchen", ".")
+        return re.findall(r"[a-z0-9]+(?:'[a-z]+)?|[.,!?]", str(text).lower())
 
     def build_vocabulary(self, sentence_list):
         frequencies = Counter()
@@ -39,79 +47,76 @@ class Vocabulary:
         return [self.stoi[token] if token in self.stoi else self.stoi["<UNK>"]
                 for token in tokenized_text]
 
-class COCODataset(Dataset):
-    def __init__(self, root_dir, list_file, vocab, transform=None):
-        self.root_dir = root_dir
-        self.transform = transform
-        self.vocab = vocab
 
-        with open(list_file, 'r') as f:
-            self.data_list = json.load(f)
+def load_split(data_dir, encoder_type):
+    """Loads the cached feature matrix and the dataset index written by prepare_data.py."""
+    with open(f"{data_dir}/dataset.json") as f:
+        images = json.load(f)["images"]
+    with open(f"{data_dir}/features_{encoder_type}.json") as f:
+        meta = json.load(f)
+    features = np.lib.format.open_memmap(f"{data_dir}/features_{encoder_type}.npy", mode="r")
+    row_of = {name: i for i, name in enumerate(meta["images"])}
+    # Only images whose features were extracted successfully are usable
+    images = [img for img in images if img["file"] in row_of]
+    for img in images:
+        img["row"] = row_of[img["file"]]
+    return images, features
+
+
+class FeatureCaptionDataset(Dataset):
+    """One sample per (image, caption) pair, reading backbone features from a memory-mapped array."""
+
+    def __init__(self, images, features, vocab):
+        self.features = features
+        self.vocab = vocab
+        self.samples = [(img["row"], cap) for img in images for cap in img["captions"]]
 
     def __len__(self):
-        return len(self.data_list)
+        return len(self.samples)
 
     def __getitem__(self, index):
-        image_name = self.data_list[index]["image"]
-        caption = self.data_list[index]["caption"]
-        
-        img_path = os.path.join(self.root_dir, image_name)
-        try:
-            img = Image.open(img_path).convert("RGB")
-        except Exception as e:
-            # Fallback to first image if current is corrupted
-            print(f"Skipping corrupted image {image_name}: {e}")
-            return self.__getitem__(0)
+        row, caption = self.samples[index]
+        feats = torch.from_numpy(np.asarray(self.features[row], dtype=np.float32))
+        tokens = self.vocab.numericalize(caption)[:MAX_CAPTION_TOKENS]
+        ids = [self.vocab.stoi["<SOS>"]] + tokens + [self.vocab.stoi["<EOS>"]]
+        return feats, torch.tensor(ids)
 
-        if self.transform is not None:
-            img = self.transform(img)
-
-        numericalized_caption = [self.vocab.stoi["<SOS>"]]
-        numericalized_caption += self.vocab.numericalize(caption)
-        numericalized_caption.append(self.vocab.stoi["<EOS>"])
-
-        return img, torch.tensor(numericalized_caption)
 
 class MyCollate:
     def __init__(self, pad_idx):
         self.pad_idx = pad_idx
 
     def __call__(self, batch):
-        images = [item[0].unsqueeze(0) for item in batch]
-        images = torch.cat(images, dim=0)
+        features = torch.stack([item[0] for item in batch])
         targets = [item[1] for item in batch]
         targets = torch.nn.utils.rnn.pad_sequence(targets, batch_first=True, padding_value=self.pad_idx)
+        return features, targets
 
-        return images, targets
 
-def get_loader(root_folder, list_file, vocab, transform, batch_size=8, num_workers=0, shuffle=True, pin_memory=True):
-    dataset = COCODataset(root_folder, list_file, vocab, transform=transform)
-    pad_idx = vocab.stoi["<PAD>"]
-
-    loader = DataLoader(
-        dataset=dataset,
+def get_feature_loader(images, features, vocab, batch_size=64, shuffle=True, num_workers=0):
+    dataset = FeatureCaptionDataset(images, features, vocab)
+    return DataLoader(
+        dataset,
         batch_size=batch_size,
-        num_workers=num_workers,
         shuffle=shuffle,
-        pin_memory=pin_memory,
-        collate_fn=MyCollate(pad_idx=pad_idx),
+        num_workers=num_workers,
+        collate_fn=MyCollate(pad_idx=vocab.stoi["<PAD>"]),
     )
 
-    return loader, dataset
 
-def get_transforms(image_size=224, is_train=True):
-    if is_train:
-        return transforms.Compose([
-            transforms.Resize(image_size + 32),
-            transforms.RandomResizedCrop(image_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        ])
-    else:
+def get_transforms(image_size=224, encoder_type="resnet50"):
+    """Inference/feature-extraction preprocessing for the given backbone."""
+    if encoder_type == "resnet50":
+        mean, std = NORMALIZATION["resnet50"]
         return transforms.Compose([
             transforms.Resize((image_size, image_size)),
             transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            transforms.Normalize(mean, std),
         ])
+    mean, std = NORMALIZATION["clip"]
+    return transforms.Compose([
+        transforms.Resize(image_size, interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.CenterCrop(image_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
