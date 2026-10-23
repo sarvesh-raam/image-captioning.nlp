@@ -68,13 +68,25 @@ class FeatureCaptionDataset(Dataset):
 
     def __init__(self, images, features, vocab):
         self.features = features
+        self.features_path = getattr(features, "filename", None)
         self.vocab = vocab
         self.samples = [(img["row"], cap) for img in images for cap in img["captions"]]
+
+    def __getstate__(self):
+        # DataLoader workers on Windows receive a pickled copy of the dataset. Send only the path of
+        # the memory-mapped feature file (pickling the memmap would copy the whole array into RAM);
+        # each worker reopens it on first use.
+        state = self.__dict__.copy()
+        if self.features_path is not None:
+            state["features"] = None
+        return state
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, index):
+        if self.features is None:
+            self.features = np.load(self.features_path, mmap_mode="r")
         row, caption = self.samples[index]
         feats = torch.from_numpy(np.asarray(self.features[row], dtype=np.float32))
         tokens = self.vocab.numericalize(caption)[:MAX_CAPTION_TOKENS]
